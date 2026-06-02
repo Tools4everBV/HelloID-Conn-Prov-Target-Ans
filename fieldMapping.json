@@ -1,0 +1,106 @@
+{
+  "Version": "v1",
+  "MappingFields": [
+    {
+      "Name": "first_name",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Field",
+          "Value": "\"Person.Name.NickName\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "student_number",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create"
+          ],
+          "MappingMode": "Field",
+          "Value": "\"Person.ExternalId\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "email",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Complex",
+          "Value": "\"function getEmail() {\\n    let mail = '';\\n\\n    if (typeof Person.Accounts.MicrosoftActiveDirectory.mail !== 'undefined' && Person.Accounts.MicrosoftActiveDirectory.mail) {\\n        mail = Person.Accounts.MicrosoftActiveDirectory.mail;\\n    }\\n  \\n    return mail;\\n}\\n\\ngetEmail()\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "role",
+      "Description": "Usually configure a fixed value of \"student\"",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create"
+          ],
+          "MappingMode": "Fixed",
+          "Value": "\"student\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "last_name",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Complex",
+          "Value": "\"//adapted from generateSurnameOption1.js [https://github.com/Tools4everBV/HelloID-Lib-Prov-HelperFunctions/blob/master/Javascript/Target/Surname_Lastname/Scripts/generateSurnameOption1.js]\\r\\n//\\r\\n// Mapping logic to generate the Surname according to the following convention.\\r\\n// B\\tBoele\\r\\n// BP\\tBoele – de Vries\\r\\n// P\\tVries\\r\\n// PB   Vries – van den Boele\\r\\nfunction generateSurname() {\\r\\n    let nickName = Person.Name.NickName;\\r\\n    let middleName = Person.Name.FamilyNamePrefix;\\r\\n    let lastName = Person.Name.FamilyName;\\r\\n    let middleNamePartner = Person.Name.FamilyNamePartnerPrefix;\\r\\n    let lastNamePartner = Person.Name.FamilyNamePartner;\\r\\n    let convention = Person.Name.Convention;\\r\\n\\r\\n    let surName = '';\\r\\n    switch (convention) {\\r\\n        case \\\"BP\\\":\\r\\n           \\r\\n            surName = surName + lastName;\\r\\n\\r\\n            surName = surName + ' - ';\\r\\n            if (typeof middleNamePartner !== 'undefined' && middleNamePartner) { surName = surName + middleNamePartner + ' ' }\\r\\n            surName = surName + lastNamePartner;\\r\\n            break;\\r\\n        case \\\"PB\\\":\\r\\n           \\r\\n            surName = surName + lastNamePartner;\\r\\n            surName = surName + ' - ';\\r\\n            if (typeof middleName !== 'undefined' && middleName) { surName = surName + middleName + ' ' }\\r\\n            surName = surName + lastName;\\r\\n            break;\\r\\n        case \\\"P\\\":           \\r\\n            surName = surName + lastNamePartner;\\r\\n            break;\\r\\n        case \\\"B\\\":\\r\\n        default:          \\r\\n            surName = surName + lastName;\\r\\n            break;\\r\\n    }\\r\\n    // Trim spaces at start and end\\r\\n    surName = surName.trim();\\r\\n\\r\\n    // Shorten string to maxAttributeLength \\r\\n    const maxAttributeLength = 64;\\r\\n    surName = surName.substring(0, maxAttributeLength);\\r\\n\\r\\n    return surName;\\r\\n}\\r\\n\\r\\ngenerateSurname();\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    },
+    {
+      "Name": "middle_name",
+      "Description": "",
+      "Type": "Text",
+      "MappingActions": [
+        {
+          "MapForActions": [
+            "Create",
+            "Update"
+          ],
+          "MappingMode": "Complex",
+          "Value": "\"\\r\\n\\r\\nfunction generateMiddelName() {\\r\\n   \\r\\n   let middleName = Person.Name.FamilyNamePrefix;   \\r\\n   let convention = Person.Name.Convention;\\r\\n   switch (convention) {\\r\\n        case \\\"PB\\\":            \\r\\n        case \\\"P\\\":\\r\\n            middleName = Person.Name.FamilyNamePartnerPrefix;\\r\\n            break;       \\r\\n        default:\\r\\n             break;\\r\\n    }\\r\\n    // Trim spaces at start and end\\r\\n    middleName = middleName.trim();    \\r\\n\\r\\n    return middleName;\\r\\n}\\r\\ngenerateMiddelName();\\r\\n\"",
+          "UsedInNotifications": false,
+          "StoreInAccountData": false
+        }
+      ]
+    }
+  ],
+  "UniqueFieldNames": []
+}

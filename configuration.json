@@ -1,0 +1,43 @@
+[
+    {
+        "key": "SchoolId",
+        "type": "input",
+        "defaultValue": "",
+        "templateOptions": {
+            "label": "SchoolId",
+            "description": "The schoolid to connect to the API",
+            "required": true
+        }
+    },
+     {
+        "key": "studentNumberLength",
+        "type": "input",
+        "defaultValue": "9",
+        "templateOptions": {
+            "label": "Student Number Length",
+            "description": "The length of the student number. If the student number is shorter than this length, it will be padded with zeros at the beginning.",
+            "required": true
+        }
+    },
+    {
+        "key": "token",
+        "type": "input",
+        "defaultValue": "",
+        "templateOptions": {
+            "type": "password",
+            "label": "Token",
+            "description": "The token to connect to the API",
+            "required": true
+        }
+    },
+    {
+        "key": "BaseUrl",
+        "type": "input",
+        "defaultValue": "",
+        "templateOptions": {
+            "label": "BaseUrl",
+            "description": "The URL to the API.",
+            "required": true
+        }
+    }
+]
