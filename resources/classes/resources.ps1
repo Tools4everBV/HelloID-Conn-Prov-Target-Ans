@@ -1,5 +1,5 @@
 ##########################################################
-# HelloID-Conn-Prov-Target-Ans-Resources-Group
+# HelloID-Conn-Prov-Target-Ans-Resources-class
 # PowerShell V2
 ##########################################################
 
@@ -229,28 +229,34 @@ try {
             $foundClasses.Add($class.name, $class)
         }        
         $pageNumber++
-        if ($null -ne $requestResult.headers.total_pages) {
-            $totalPages = [int]::Parse($requestResult.headers.total_pages)
+        if ($null -ne $requestResult.headers."total-pages") {
+            $totalPages = [int]::Parse($requestResult.headers."total-pages")
         }
+        
     } while ($pageNumber -le $totalPages)   
    
     foreach ($resource in $resourceContext.SourceData) {
         try {
             <# Resource creation preview uses a timeout of 30 seconds while actual run has timeout of 10 minutes #>
-             Write-Information  "Ans resource [$($resource.AnsExternalId)][$($resource.AnsName)][$($resource.AnsYear)]"
-             $body = @{
-                name = $resource.AnsName
-                external_id = $resource.AnsExternalId
-                year = [int]::Parse($resource.AnsYear)
+            Write-Information  "Ans resource [$($resource.AnsExternalId)][$($resource.AnsName)][$($resource.AnsYear)]"
+            if ($null -eq $resource.AnsExternalId -or $null -eq $resource.AnsName -or $null -eq $resource.AnsYear) {
+                Write-Warning "Resource [$($resource.AnsExternalId)][$($resource.AnsName)][$($resource.AnsYear)] is missing required fields. Skipping."
+                continue
             }
-             $splatCreateParams = @{                
+
+            $body = @{
+                name        = $resource.AnsName
+                external_id = $resource.AnsExternalId
+                year        = [int]::Parse($resource.AnsYear)
+            }
+            $splatCreateParams = @{                
                 Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/schools/$($actionContext.Configuration.SchoolId)/classes"
                 Method  = 'POST'
                 Body    = $body | ConvertTo-Json
                 Headers = @{
                     Authorization = "Bearer $access_token"
                 }
-            } 
+            }           
             
             # If resource does not exist
             if (-not $foundClasses.ContainsKey($resource.AnsName)) {
@@ -258,6 +264,7 @@ try {
                 if (-not ($actionContext.DryRun -eq $True)) {
                     Write-Information "Create [$($resource.AnsName)] Ans resource"
                     $createResult = Invoke-AnsRestMethod @splatCreateParams
+                    $foundClasses.Add($resource.AnsName, $createResult[0]) # Add the newly created resource to the list of found resources to prevent duplicate creation in the same run
 
                 }
                 else {
@@ -271,8 +278,37 @@ try {
                     })
             }
             else {
-                Write-Information "Resource [$($resource.AnsName)] already exists. No creation needed."
-            }           
+                # class already exist, check if an update is needed based on the external id and year, as the name is used as unique identifier
+                if ($foundClasses[$resource.AnsName].external_id -ne $resource.AnsExternalId -or   
+                    $foundClasses[$resource.AnsName].year -ne [int]::Parse($resource.AnsYear)) {
+
+                    $splatUpdateParams = @{                
+                        Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/classes/$($foundClasses[$resource.AnsName].id)"
+                        Method  = 'PATCH'
+                        Body    = $body | ConvertTo-Json
+                        Headers = @{
+                            Authorization = "Bearer $access_token"
+                        }
+                    }     
+                    
+                    if (-not ($actionContext.DryRun -eq $True)) {
+                        Write-Information "Update [$($resource.AnsName)] Ans resource"
+                        $updateResult = Invoke-AnsRestMethod @splatUpdateParams
+                        $foundClasses[$resource.AnsName] = $updateResult[0] # Update the resource in the list of found resources to prevent duplicate update in the same run
+                    }
+                    else {
+                        Write-Information "[DryRun] Update Ans [$($resource.AnsName)] resource, will be executed during enforcement"
+                    }
+
+                    $outputContext.AuditLogs.Add([PSCustomObject]@{
+                            Action  = 'UpdateResource'
+                            Message = "Updated resource: [$($resource.AnsName)]"
+                            IsError = $false
+                        })
+
+                    Write-Information "Resource [$($resource.AnsName)] Updated. new external id: [$($resource.AnsExternalId)], new year: [$($resource.AnsYear)]"
+                }           
+            }
         }
         catch {
             $outputContext.Success = $false

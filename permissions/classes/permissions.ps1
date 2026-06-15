@@ -1,5 +1,5 @@
 ############################################################
-# HelloID-Conn-Prov-Target-Ans-Permissions-Classes
+# HelloID-Conn-Prov-Target-Ans-Permissions-Class
 # PowerShell V2
 ############################################################
 
@@ -168,8 +168,8 @@ try {
         }        
         
         $pageNumber++
-        if ($null -ne $requestResult.headers.total_pages) {
-           $totalPages = [int]::Parse($requestResult.headers.total_pages)
+        if ($null -ne $requestResult.headers."total-pages") {
+           $totalPages = [int]::Parse($requestResult.headers."total-pages")
         }
     } while ($pageNumber -le $totalPages)   
    

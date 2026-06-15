@@ -95,7 +95,7 @@
             "Update"
           ],
           "MappingMode": "Complex",
-          "Value": "\"\\r\\n\\r\\nfunction generateMiddelName() {\\r\\n   \\r\\n   let middleName = Person.Name.FamilyNamePrefix;   \\r\\n   let convention = Person.Name.Convention;\\r\\n   switch (convention) {\\r\\n        case \\\"PB\\\":            \\r\\n        case \\\"P\\\":\\r\\n            middleName = Person.Name.FamilyNamePartnerPrefix;\\r\\n            break;       \\r\\n        default:\\r\\n             break;\\r\\n    }\\r\\n    // Trim spaces at start and end\\r\\n    middleName = middleName.trim();    \\r\\n\\r\\n    return middleName;\\r\\n}\\r\\ngenerateMiddelName();\\r\\n\"",
+          "Value": "\"\\r\\n\\r\\nfunction generateMiddleName() {\\r\\n   \\r\\n   let middleName = \\\"\\\"  ;\\r\\n   let convention = Person.Name.Convention;\\r\\n   switch (convention) {\\r\\n        case \\\"PB\\\":            \\r\\n        case \\\"P\\\":\\r\\n           middleName = middleName + Person.Name.FamilyNamePartnerPrefix;\\r\\n            break;       \\r\\n        default:       \\r\\n        middleName = middleName + Person.Name.FamilyNamePrefix;\\r\\n        break;  \\r\\n   }\\r\\n    // Trim spaces at start and end\\r\\n    middleName = middleName.trim(); \\r\\n    if (middleName ==\\\"null\\\")\\r\\n    {\\r\\n        return \\\"\\\"\\r\\n    }\\r\\n    else\\r\\n    {\\r\\n        return middleName;\\r\\n    }\\r\\n}\\r\\ngenerateMiddleName();\\r\\n\"",
           "UsedInNotifications": false,
           "StoreInAccountData": false
         }

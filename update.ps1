@@ -146,6 +146,11 @@ try {
     if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
         throw 'The account reference could not be found'
     }
+    if ($actionContext.AccountCorrelated){
+            # When the user is reboarded, de alumni status is set to $false, indicating that it is again an active account managed by HelloID.
+            $actionContext.Data | Add-Member -MemberType NoteProperty -Name "alumni" -Value $false
+            $outputContext.Data | Add-Member -MemberType NoteProperty -Name "alumni" -Value $false
+    }  
 
     Write-Information 'Verifying if a Ans account exists'
     $access_token = $actionContext.Configuration.token
@@ -165,10 +170,7 @@ try {
 
         $outputContext.PreviousData = $correlatedAccount
 
-        if ($actionContext.AccountCorrelated){
-            # When the user is reboarded, de alumni status is set to $false, indicating that it is again an active account managed by HelloID.
-            $actionContext.Data | Add-Member -MemberType NoteProperty -Name "alumni" -Value $false
-        }         
+              
        
         if ($actionContext.Data.PSObject.Properties.Name -contains 'student_number') {
             $actionContext.Data.student_number = $actionContext.Data.student_number.PadLeft($actionContext.Configuration.StudentNumberLength, '0')

@@ -22,6 +22,7 @@
     - [Requirements](#requirements)
     - [Connection settings](#connection-settings)
     - [Correlation configuration](#correlation-configuration)
+    - [Resources configuration](#resources-configuration)
     - [Field mapping](#field-mapping)
     - [Account Reference](#account-reference)
   - [Remarks](#remarks)
@@ -70,6 +71,7 @@ The following settings are required to connect to the API.
 | Setting  | Description                        | Mandatory |
 | -------- | ---------------------------------- | --------- |
 | SchoolId | The id of the school               | Yes       |
+| Use Student Number Padding | Whether to pad the student_number with zeros for correlation and import purposes | Yes |
 | studentNumberLength | The length of the student_number property, used for padding with zeros | Yes |
 | Token     | The access token to connect to the API | Yes       |
 | BaseUrl  | The URL to the API                 | Yes       | https://edu.ans.app
@@ -88,6 +90,27 @@ The correlation configuration is used to specify which properties will be used t
 
 > [!TIP]
 > _For more information on correlation, please refer to our correlation [documentation](https://docs.helloid.com/en/provisioning/target-systems/powershell-v2-target-systems/correlation.html) pages_.
+
+### Resources configuration
+The Resources script is used to create classes in Ans, which are used for permissions. The script uses the class name as the unique identifier for the class, so if a class with the same name already exists, it will not create a new class. 
+| Setting | Value                             |
+| ------------------------- | --------------------------------- |
+| Resource configuration name       | Classes (for example)     |
+| Select a field from the contract. | "Custom"                  |
+
+The following custom variables must  be available in de contract for the resource provisioning to work:
+| Variable name | Description|
+| ------------- | ----------- | 
+| AnsName | The name of the class to be created in Ans. This is used as the unique identifier for the class|
+| AnsExternalId | The external id of the class to be created in Ans. |
+| AnsYear | The school year, used for the class creation in Ans. |
+
+See the documentation for more information on how to add custom variables to the contract:
+https://docs.helloid.com/en/provisioning/persons/contracts/contract-schema/add-a-custom-person-or-contract-field.html 
+
+> [!WARNING]
+> When the contract contains additional custom variables that are not used in the resource
+> provisioning script, the SourceData object may contain multiple "identical" entries in wich only the additional custom variables differ. This does not cause an issue for this particular resource script, als only the first encounterd object is used However this may cause perfomance issues. To solve this issue, it is recommended to only include the necessary custom variables in the contract when using the resource provisioning feature, or use an other field from the contract that does not cause identical entries in the SourceData object.  
 
 ### Field mapping
  
