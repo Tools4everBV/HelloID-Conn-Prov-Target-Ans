@@ -137,11 +137,19 @@ function ConvertTo-HelloIDImportAccountObject {
     )
     process {
         # Making sure only fieldMapping fields are imported
-        $helloidImportAccountObject = [PSCustomObject]@{} 
+        $helloidImportAccountObject = @{} 
         foreach ($field in $actionContext.ImportFields) {            
             switch ($field) {
-                default {                   
-                    $helloidImportAccountObject | Add-Member -MemberType NoteProperty -Name $field -Value $AccountObject.$($field)
+                'student_number' {                    
+                    if ($null -ne $AccountObject.student_number -and $actionContext.Configuration.UseStudentNumberPadding) {
+                         $helloidImportAccountObject["student_number"] = $AccountObject.student_number.TrimStart('0')                       
+                    }
+                    else{
+                        $helloidImportAccountObject["student_number"] = $AccountObject.student_number 
+                    }                                       
+                }
+                default { 
+                    $helloidImportAccountObject["$field"] = $AccountObject.$($field)                         
                 }
             }
         }
@@ -154,8 +162,9 @@ try {
     Write-Information 'Starting Ans account entitlement import'    
 
     $access_token = $actionContext.Configuration.token
-    [int] $pageSize = 50
+    $pageSize = 50
     [int] $pageNumber = 1
+    [int] $totalPages = 1  
     do { 
         $splatImportParams = @{           
             Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/schools/$($actionContext.Configuration.SchoolId)/users?page=$pageNumber&limit=$pageSize"        
@@ -167,7 +176,7 @@ try {
         $importResult = Invoke-AnsImportWebRequest @splatImportParams         
 
         if ([string]::IsNullOrEmpty($importResult.Content)) {
-           break;
+            break;
         }
         $FoundAccounts = $importResult.content | ConvertFrom-Json
         foreach ($account in $FoundAccounts) {
@@ -177,7 +186,7 @@ try {
             # Make sure the displayName has a value
             $displayName = "$($account.first_name) $($account.middle_name) $($account.last_name)".trim()
             if ([string]::IsNullOrEmpty($displayName)) {
-                $displayName = $account.Id
+                $displayName = "$($account.Id)"
             }
 
             # Make sure the userName has a value
@@ -190,20 +199,24 @@ try {
             $isEnabled = $false
             if ($account.active -eq $true) {
                 $isEnabled = $true
-            }
-
+            }   
+                         
             Write-Output @{
                 AccountReference = $account.Id
                 DisplayName      = $displayName
                 UserName         = $username
                 Enabled          = $isEnabled
                 Data             = $data
-            }           
+            }  
+                     
         }
 
         # Return the result
         $pageNumber++
-    } while ($pageNumber -le $importResult.headers.total_pages)   
+        if ($null -ne $importResult.headers."total-pages") {
+            $totalPages = [int]::Parse($importResult.headers."total-pages")
+        }
+    } while ($pageNumber -le $totalPages)   
       
     Write-Information 'Ans account entitlement import completed'
 }

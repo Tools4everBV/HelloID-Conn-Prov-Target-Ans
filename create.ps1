@@ -160,7 +160,9 @@ try {
 
         $correlationValue = $correlationValue.Trim() 
         if ($correlationField -eq 'student_number') {
-            $correlationValue = $correlationValue.PadLeft($actionContext.Configuration.StudentNumberLength, '0') # Pad the student number with zeros based on the configured length
+            if ($actionContext.Configuration.UseStudentNumberPadding) {
+                 $correlationValue = $correlationValue.PadLeft($actionContext.Configuration.StudentNumberLength, '0') # Pad the student number with zeros based on the configured length
+            }  
         }    
 
         # Determine if a user needs to be [created] or [correlated]
@@ -207,10 +209,10 @@ try {
                 Write-Information 'Creating and correlating Ans account'           
 
                 $createResult = Invoke-AnsRestMethod @splatCreateParams
+                $outputContext.AccountReference = $createResult[0].Id 
                 $createdHelloIDAccount = ConvertTo-HelloIDAccountObject -AnsAccountObject $createResult[0]
-
                 $outputContext.Data = $createdHelloIDAccount
-                $outputContext.AccountReference = $createdHelloIDAccount.Id 
+              
             }
             else {
                 Write-Information '[DryRun] Create and correlate Ans account, will be executed during enforcement'

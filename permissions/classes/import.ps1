@@ -201,7 +201,7 @@ function invoke-AnsRestMethod {
         Return , $Result
     }   
 } 
-#endregion
+#endregion 
 
 try {
     Write-Information 'Starting Ans permission entitlement import'
@@ -261,8 +261,8 @@ try {
             }
         }
         $pageNumber++
-        if ($null -ne $requestResult.headers.total_pages) {
-           $totalPages = [int]::Parse($requestResult.headers.total_pages)
+         if ($null -ne $requestResult.headers."total-pages") {
+            $totalPages = [int]::Parse($requestResult.headers."total-pages")
         }
     } while ($pageNumber -le $totalPages)   
     Write-Information 'Ans permission entitlement import completed'

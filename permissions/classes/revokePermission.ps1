@@ -154,7 +154,6 @@ try {
     # Process
     switch ($lifecycleProcess) {
         'RevokePermission' {
-
             
             #get the current users in this class 
             $splatReadParams = @{           
