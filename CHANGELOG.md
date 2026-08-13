@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file. The format 
 
 - Made the *enable*, *disable* and *delete* actions conditional.
 - Removed the `ConvertTo-HelloIDAccount` function from the *enable*, *disable*, *delete*, *grant* and *revoke* actions.
-- 
+
 ### Fixed
 
 - Improved error handling when retrieving accounts. When an account did not exist, a `NullReferenceException` was thrown by the `ConvertTo-HelloIDAccount` function.
