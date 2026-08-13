@@ -24,7 +24,7 @@ function Resolve-AnsError {
         if (-not [string]::IsNullOrEmpty($ErrorObject.Exception.Data.OriginalLine)) {
             $httpErrorObj.Line += " (while executing Line $($ErrorObject.Exception.Data.OriginalScriptLineNumber): $($ErrorObject.Exception.Data.OriginalLine))"
         }
-      
+
         if (-not [string]::IsNullOrEmpty($ErrorObject.ErrorDetails.Message)) {
             $httpErrorObj.ErrorDetails = $ErrorObject.ErrorDetails.Message
         }
@@ -37,8 +37,8 @@ function Resolve-AnsError {
             }
         }
         try {
-           
-            $httpErrorObj.FriendlyMessage = $httpErrorObj.ErrorDetails 
+
+            $httpErrorObj.FriendlyMessage = $httpErrorObj.ErrorDetails
         }
         catch {
             $httpErrorObj.FriendlyMessage = $httpErrorObj.ErrorDetails
@@ -88,54 +88,34 @@ function invoke-AnsRestMethod {
                 if ($Body) {
                     $splatParams['Body'] = $Body
                 }
-                $Result = Invoke-RestMethod @splatParams -Verbose:$false
+                Invoke-RestMethod @splatParams -Verbose:$false
                 break
             }
-            catch {                
+            catch {
                 if ($_.Exception.Response.StatusCode -eq 429) {
                     [int] $retryAfter = -1
-                    if ( -not [string]::IsNullOrEmpty($_.Exception.Response.Headers['ratelimit-reset'])) {                    
+                    if ( -not [string]::IsNullOrEmpty($_.Exception.Response.Headers['ratelimit-reset'])) {
                         $retryAfter = $_.Exception.Response.Headers['ratelimit-reset'] -as [int]
                         $retryAfter += 5 # Adding a buffer of 5 seconds to ensure the rate limit has reset before retrying
                         if ($retryAfter -gt 300) {
                             $retryAfter = 300 # Set a maximum retry after of 5 minutes to prevent excessively long wait times
                         }
-                    } 
+                    }
                     Write-Warning "Received a 429 Too Many Requests response. Retrying after $retryAfter seconds..."
                     if ($retryAfter -le 0) {
                         $retryAfter = 10 * $retry # Default retry after with an incremental backoff strategy if the header is not provided
-                        Write-Warning "ratelimit-reset header is missing. Defaulting to retry after $retryAfter seconds."  
+                        Write-Warning "ratelimit-reset header is missing. Defaulting to retry after $retryAfter seconds."
                     }
-                    Start-Sleep -Seconds $retryAfter  
-                    Continue         
+                    Start-Sleep -Seconds $retryAfter
+                    Continue
                 }
-                elseif ($_.Exception.Response.StatusCode -eq '404') {
-                    break;
-                }
-                else {   
+                else {
                     $_.Exception.Data["OriginalLine"] = $_.InvocationInfo.Line
-                    $_.Exception.Data["OriginalScriptLineNumber"] = $_.InvocationInfo.ScriptLineNumber                
+                    $_.Exception.Data["OriginalScriptLineNumber"] = $_.InvocationInfo.ScriptLineNumber
                     $PSCmdlet.ThrowTerminatingError($_)
                 }
             }
         }
-        Return , $Result
-    }   
-} 
-
-function ConvertTo-HelloIDAccountObject {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory)]
-        [PSCustomObject] $AnsAccountObject
-    )
-    process {
-        # Making sure only fieldMapping fields are imported
-        $helloidAccountObject = [PSCustomObject]@{} 
-        $null = $outputContext.Data.PSObject.Properties.foreach{
-            $helloidAccountObject | Add-Member -MemberType NoteProperty -Name $($_.Name) -Value  ($AnsAccountObject.$($_.Name) -as $_.TypeNameOfValue)
-        }         
-        Write-Output $helloidAccountObject
     }
 }
 #endregion
@@ -147,23 +127,40 @@ try {
     }
 
     Write-Information 'Verifying if a Ans account exists'
-    
+
     $access_token = $actionContext.Configuration.token
 
-    $splatCorrelateParams = @{           
+    $splatCorrelateParams = @{
         Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/users/$($actionContext.References.Account)"
         Method  = 'GET'
         Headers = @{
             Authorization = "Bearer $access_token"
-        }           
+        }
     }
 
-    $correlationResult = Invoke-AnsRestMethod @splatCorrelateParams 
-    $correlatedAccount = ConvertTo-HelloIDAccountObject -AnsAccountObject $correlationResult[0]
-  
-    
+    try {
+        $correlatedAccount = Invoke-AnsRestMethod @splatCorrelateParams
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode -eq '404') {
+            $correlatedAccount = $null
+        }
+    }
+
+
     if ($null -ne $correlatedAccount) {
-        $lifecycleProcess = 'DeleteAccount'
+        if (($correlatedAccount.active -eq $false) -and ($correlatedAccount.alumni -eq $true)) {
+            Write-Information "Ans account with accountReference: [$($actionContext.References.Account)] is already deleted. SKipping action"
+            $outputContext.Success = $true
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
+                    Message = "Ans account with accountReference: [$($actionContext.References.Account)] is already deleted. SKipping action"
+                    IsError = $false
+                })
+        }
+        else {
+            $lifecycleProcess = 'DeleteAccount'
+        }
+
     }
     else {
         $lifecycleProcess = 'NotFound'
@@ -174,7 +171,7 @@ try {
         'DeleteAccount' {
             if (-not($actionContext.DryRun -eq $true)) {
                 Write-Information "Deleting Ans account with accountReference: [$($actionContext.References.Account)]"
-                $splatDeleteParams = @{                
+                $splatDeleteParams = @{
                     Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/users/$($actionContext.References.Account)"
                     Method  = 'PATCH'
                     Body    = @{
@@ -184,14 +181,14 @@ try {
                     Headers = @{
                         Authorization = "Bearer $access_token"
                     }
-                } 
-                $deleteResult = Invoke-AnsRestMethod @splatDeleteParams         
+                }
+                $deleteResult = Invoke-AnsRestMethod @splatDeleteParams
             }
             else {
                 Write-Information "[DryRun] Delete Ans account with accountReference: [$($actionContext.References.Account)], will be executed during enforcement"
             }
 
-           
+
             $outputContext.Success = $true
             $outputContext.AuditLogs.Add([PSCustomObject]@{
                     Message = "Delete account: [$($actionContext.References.Account)] was successful. Action initiated by: [$($actionContext.Origin)]"
