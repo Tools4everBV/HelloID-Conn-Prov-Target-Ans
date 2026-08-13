@@ -24,7 +24,7 @@ function Resolve-AnsError {
         if (-not [string]::IsNullOrEmpty($ErrorObject.Exception.Data.OriginalLine)) {
             $httpErrorObj.Line += " (while executing Line $($ErrorObject.Exception.Data.OriginalScriptLineNumber): $($ErrorObject.Exception.Data.OriginalLine))"
         }
-      
+
         if (-not [string]::IsNullOrEmpty($ErrorObject.ErrorDetails.Message)) {
             $httpErrorObj.ErrorDetails = $ErrorObject.ErrorDetails.Message
         }
@@ -37,8 +37,8 @@ function Resolve-AnsError {
             }
         }
         try {
-           
-            $httpErrorObj.FriendlyMessage = $httpErrorObj.ErrorDetails 
+
+            $httpErrorObj.FriendlyMessage = $httpErrorObj.ErrorDetails
         }
         catch {
             $httpErrorObj.FriendlyMessage = $httpErrorObj.ErrorDetails
@@ -87,42 +87,36 @@ function invoke-AnsRestMethod {
                 if ($Body) {
                     $splatParams['Body'] = $Body
                 }
-                $Result = Invoke-RestMethod @splatParams -Verbose:$false
+                Invoke-RestMethod @splatParams -Verbose:$false
                 break
             }
-            catch {                
+            catch {
                 if ($_.Exception.Response.StatusCode -eq 429) {
                     [int] $retryAfter = -1
-                    if ( -not [string]::IsNullOrEmpty($_.Exception.Response.Headers['ratelimit-reset'])) {                    
+                    if ( -not [string]::IsNullOrEmpty($_.Exception.Response.Headers['ratelimit-reset'])) {
                         $retryAfter = $_.Exception.Response.Headers['ratelimit-reset'] -as [int]
                         $retryAfter += 5 # Adding a buffer of 5 seconds to ensure the rate limit has reset before retrying
                         if ($retryAfter -gt 300) {
                             $retryAfter = 300 # Set a maximum retry after of 5 minutes to prevent excessively long wait times
                         }
-                    } 
+                    }
                     Write-Warning "Received a 429 Too Many Requests response. Retrying after $retryAfter seconds..."
                     if ($retryAfter -le 0) {
                         $retryAfter = 10 * $retry # Default retry after with an incremental backoff strategy if the header is not provided
-                        Write-Warning "ratelimit-reset header is missing. Defaulting to retry after $retryAfter seconds."  
+                        Write-Warning "ratelimit-reset header is missing. Defaulting to retry after $retryAfter seconds."
                     }
-                    Start-Sleep -Seconds $retryAfter  
-                    Continue         
+                    Start-Sleep -Seconds $retryAfter
+                    Continue
                 }
-                elseif ($_.Exception.Response.StatusCode -eq '404') {
-                    break;
-                }
-                else {   
+                else {
                     $_.Exception.Data["OriginalLine"] = $_.InvocationInfo.Line
-                    $_.Exception.Data["OriginalScriptLineNumber"] = $_.InvocationInfo.ScriptLineNumber                
+                    $_.Exception.Data["OriginalScriptLineNumber"] = $_.InvocationInfo.ScriptLineNumber
                     $PSCmdlet.ThrowTerminatingError($_)
                 }
             }
         }
-        Return , $Result
-    }   
-} 
-
-
+    }
+}
 
 #endregion
 
@@ -136,18 +130,24 @@ try {
     Write-Information 'Verifying if a Ans account exists'
 
     $access_token = $actionContext.Configuration.token
-    $splatCorrelateParams = @{           
+    $splatCorrelateParams = @{
         Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/users/$($actionContext.References.Account)"
         Method  = 'GET'
         Headers = @{
             Authorization = "Bearer $access_token"
-        }           
+        }
     }
 
-    $correlationResult = Invoke-AnsRestMethod @splatCorrelateParams 
-    $correlatedAnsAccount = $correlationResult[0]
-    
-    if ($null -ne $correlatedAnsAccount) {
+    try {
+        $correlatedAccount = Invoke-AnsRestMethod @splatCorrelateParams
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode -eq '404') {
+            $correlatedAccount = $null
+        }
+    }
+
+    if ($null -ne $correlatedAccount) {
         $lifecycleProcess = 'GrantPermission'
     }
     else {
@@ -157,16 +157,16 @@ try {
     # Process
     switch ($lifecycleProcess) {
         'GrantPermission' {
-          
+
             # get the current users in this class, to be able to extend the list of users with the new user
-            $splatReadParams = @{           
+            $splatReadParams = @{
                 Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/classes/$($actionContext.References.Permission.Reference)"
                 Method  = 'GET'
                 Headers = @{
                     Authorization = "Bearer $access_token"
-                }           
+                }
             }
-            $classCorrelationResult = Invoke-AnsRestMethod @splatReadParams 
+            $classCorrelationResult = Invoke-AnsRestMethod @splatReadParams
             $correlatedClass = $classCorrelationResult[0]
             if ($null -eq $correlatedClass) {
                 Write-Information "Ans class: [$($actionContext.References.Permission.Reference)] could not be found, indicating that it may have been deleted"
@@ -174,31 +174,31 @@ try {
                 $outputContext.AuditLogs.Add([PSCustomObject]@{
                         Message = "Ans class: [$($actionContext.References.Permission.Reference)] could not be found, indicating that it may have been deleted"
                         IsError = $true
-                    })               
-                break   
+                    })
+                break
             }
             $currentMembers = $correlatedClass.user_ids
-            if ($currentMembers -notcontains $correlatedAnsAccount.Id) {
-                $currentMembers += $correlatedAnsAccount.Id          
+            if ($currentMembers -notcontains $correlatedAccount.Id) {
+                $currentMembers += $correlatedAccount.Id
 
                 $body = @{
                     user_ids = $currentMembers
-                }         
-          
+                }
+
                 Write-Information "Granting Ans permission: [$($actionContext.PermissionDisplayName)] - [$($actionContext.References.Permission.Reference)]"
-           
-                $splatUpdateParams = @{                
+
+                $splatUpdateParams = @{
                     Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/classes/$($actionContext.References.Permission.Reference)"
                     Method  = 'PATCH'
-                    Body    = $body | ConvertTo-Json 
+                    Body    = $body | ConvertTo-Json
                     Headers = @{
                         Authorization = "Bearer $access_token"
                     }
-                } 
+                }
 
                 if (-not($actionContext.DryRun -eq $true)) {
-                    $grantResult = Invoke-AnsRestMethod @splatUpdateParams                       
-                }        
+                    $grantResult = Invoke-AnsRestMethod @splatUpdateParams
+                }
                 else {
                     Write-Information "[DryRun] Grant Ans permission: [$($actionContext.PermissionDisplayName)] - [$($actionContext.References.Permission.Reference)], will be executed during enforcement"
                 }
@@ -210,7 +210,7 @@ try {
                     IsError = $false
                 })
             break
-        }  
+        }
 
         'NotFound' {
             Write-Information "Ans account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
