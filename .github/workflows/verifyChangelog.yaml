@@ -5,4 +5,4 @@ on:
 
 jobs:
   verify-changelog:
-    uses: Tools4everBV/.github/.github/workflows/verifyChangelog.yaml@main
+    uses: Tools4everBV/.github/.github/workflows/verifyChangelogV3.yaml@main
