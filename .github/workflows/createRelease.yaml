@@ -6,4 +6,4 @@ on:
 jobs:
   verify-changelog:
     if: github.event.pull_request.merged == true
-    uses: Tools4everBV/.github/.github/workflows/createRelease.yaml@main
+    uses: Tools4everBV/.github/.github/workflows/createReleaseV7.yaml@main
