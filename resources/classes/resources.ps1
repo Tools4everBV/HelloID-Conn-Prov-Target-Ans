@@ -2,7 +2,7 @@
 # HelloID-Conn-Prov-Target-Ans-Resources-class
 # PowerShell V2
 ##########################################################
-
+$actionContext.DryRun = $True
 
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
@@ -205,7 +205,18 @@ function invoke-AnsRestMethod {
 #endregion
 
 try {
-    Write-Information "Creating [$($resourceContext.SourceData.Count)] classes"
+    # School year rolls over on September 1st: months >= 9 use current year, otherwise previous year
+    $today = Get-Date
+    $currentSchoolYear = if ($today.Month -ge 9) { $today.Year } else { $today.Year - 1 }
+
+    $resources = $resourceContext.SourceData | Select-Object -Property AnsName,AnsExternalId,AnsYear,AnsStudy
+    $resources = $resources | Where-Object {
+        ($null -ne $_.AnsName) -and
+        ($null -ne $_.AnsYear) -and
+        ([int]::Parse($_.AnsYear) -eq $currentSchoolYear)
+    }
+    Write-Information "Creating [$($resources.Count)] classes for school year [$currentSchoolYear]"
+    #Write-Information ($resources | ConvertTo-Json)
 
     $access_token = $actionContext.Configuration.token
     $pageSize = 50
@@ -226,7 +237,13 @@ try {
         }
         $tmpFoundClasses = $requestResult.content | ConvertFrom-Json
         foreach ($class in $tmpFoundClasses) {
-            $foundClasses.Add($class.name, $class)
+            # Composite key: name + year, because ANS reuses class names across school years
+            $key = "$($class.name)|$($class.year)"
+            if ($foundClasses.ContainsKey($key)) {
+                Write-Warning "Duplicate class found in ANS for name [$($class.name)] year [$($class.year)] (id [$($class.id)]); keeping first occurrence."
+                continue
+            }
+            $foundClasses.Add($key, $class)
         }        
         $pageNumber++
         if ($null -ne $requestResult.headers."total-pages") {
@@ -235,7 +252,7 @@ try {
         
     } while ($pageNumber -le $totalPages)   
    
-    foreach ($resource in $resourceContext.SourceData) {
+    foreach ($resource in $resources) {
         try {
             <# Resource creation preview uses a timeout of 30 seconds while actual run has timeout of 10 minutes #>
             Write-Information  "Ans resource [$($resource.AnsExternalId)][$($resource.AnsName)][$($resource.AnsYear)]"
@@ -248,7 +265,11 @@ try {
                 name        = $resource.AnsName
                 external_id = $resource.AnsExternalId
                 year        = [int]::Parse($resource.AnsYear)
+                study       = $resource.AnsStudy
             }
+
+            $resourceKey = "$($resource.AnsName)|$([int]::Parse($resource.AnsYear))"
+
             $splatCreateParams = @{                
                 Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/schools/$($actionContext.Configuration.SchoolId)/classes"
                 Method  = 'POST'
@@ -256,15 +277,15 @@ try {
                 Headers = @{
                     Authorization = "Bearer $access_token"
                 }
-            }           
+            }
             
             # If resource does not exist
-            if (-not $foundClasses.ContainsKey($resource.AnsName)) {
+            if (-not $foundClasses.ContainsKey($resourceKey)) {
                 
                 if (-not ($actionContext.DryRun -eq $True)) {
                     Write-Information "Create [$($resource.AnsName)] Ans resource"
                     $createResult = Invoke-AnsRestMethod @splatCreateParams
-                    $foundClasses.Add($resource.AnsName, $createResult[0]) # Add the newly created resource to the list of found resources to prevent duplicate creation in the same run
+                    $foundClasses.Add($resourceKey, $createResult[0]) # Add the newly created resource to the list of found resources to prevent duplicate creation in the same run
 
                 }
                 else {
@@ -278,12 +299,11 @@ try {
                     })
             }
             else {
-                # class already exist, check if an update is needed based on the external id and year, as the name is used as unique identifier
-                if ($foundClasses[$resource.AnsName].external_id -ne $resource.AnsExternalId -or   
-                    $foundClasses[$resource.AnsName].year -ne [int]::Parse($resource.AnsYear)) {
+                # class already exist, check if an update is needed based on the external id, as name + year form the unique identifier
+                if ($foundClasses[$resourceKey].external_id -ne $resource.AnsExternalId) {
 
                     $splatUpdateParams = @{                
-                        Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/classes/$($foundClasses[$resource.AnsName].id)"
+                        Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/classes/$($foundClasses[$resourceKey].id)"
                         Method  = 'PATCH'
                         Body    = $body | ConvertTo-Json
                         Headers = @{
@@ -294,7 +314,7 @@ try {
                     if (-not ($actionContext.DryRun -eq $True)) {
                         Write-Information "Update [$($resource.AnsName)] Ans resource"
                         $updateResult = Invoke-AnsRestMethod @splatUpdateParams
-                        $foundClasses[$resource.AnsName] = $updateResult[0] # Update the resource in the list of found resources to prevent duplicate update in the same run
+                        $foundClasses[$resourceKey] = $updateResult[0] # Update the resource in the list of found resources to prevent duplicate update in the same run
                     }
                     else {
                         Write-Information "[DryRun] Update Ans [$($resource.AnsName)] resource, will be executed during enforcement"
@@ -349,5 +369,4 @@ catch {
             IsError = $true
         })
 }
-
 
