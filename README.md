@@ -5,7 +5,7 @@
 -->
 
 > [!IMPORTANT]
-> This repository contains the connector and configuration code only. The implementer is responsible to acquire the connection details such as username, password, certificate, etc. You might even need to sign a contract or agreement with the supplier before implementing this connector. Please contact the client's application manager to coordinate the connector requirements.
+> This repository contains the connector and configuration code only. The implementer is responsible for acquiring the connection details such as username, password, certificate, etc. You might even need to sign a contract or agreement with the supplier before implementing this connector. Please contact the client's application manager to coordinate the connector requirements.
 
 <p align="center">
   <img src="">
@@ -40,43 +40,42 @@ _HelloID-Conn-Prov-Target-Ans_ is a _target_ connector. _Ans_ provides a set of 
 
 The following features are available:
 
-| Feature                                   | Supported | Actions                                 | Remarks           |
-| ----------------------------------------- | --------- | --------------------------------------- | ----------------- |
-| **Account Lifecycle**                     | ✅         | Create, Update, Enable, Disable, Delete | Delete does not remove the account from the system, it only disables it, and sets the alumni status op true                 |
-| **Permissions**                           | ✅         | Retrieve, Grant, Revoke                | Static :  membership of class  |
-| **Resources**                             | ✅         | Creates classes                        |                   |
-| **Entitlement Import: Accounts**          | ✅         |                                        |                   |
-| **Entitlement Import: Permissions**       | ✅        | reports the membership of classes      |                   |
-| **Governance Reconciliation Resolutions** | ✅        |                                         |                   |
+| Feature                                   | Supported | Actions                                 | Remarks                                                                                                            |
+| ----------------------------------------- | --------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Account Lifecycle**                     | ✅        | Create, Update, Enable, Disable, Delete | Delete does not remove the account from the system; it only disables the account and sets the alumni status to `true`. |
+| **Permissions**                           | ✅        | Retrieve, Grant, Revoke                 | Static: membership of a class.                                                                                     |
+| **Resources**                             | ✅        | Creates classes.                        |                                                                                                                    |
+| **Entitlement Import: Accounts**          | ✅        |                                         |                                                                                                                    |
+| **Entitlement Import: Permissions**       | ✅        | Reports the membership of classes.      |                                                                                                                    |
+| **Governance Reconciliation Resolutions** | ✅        |                                         |                                                                                                                    |
 
 
 
 ## Getting started
 
 ### HelloID Icon URL
+
 URL of the icon used for the HelloID Provisioning target system.
+
 ```
 https://raw.githubusercontent.com/Tools4everBV/HelloID-Conn-Prov-Target-Ans/refs/heads/main/Icon.png
 ```
 
 ### Requirements
 
-The Concurrent actions setting must be set to 1
-
+The `Concurrent actions` setting must be set to `1`, because the connector needs to retrieve the existing class memberships when updating a class membership. Running multiple updates in parallel can otherwise cause concurrency issues.
 
 ### Connection settings
 
 The following settings are required to connect to the API.
 
-| Setting  | Description                        | Mandatory |
-| -------- | ---------------------------------- | --------- |
-| SchoolId | The id of the school               | Yes       |
-| Use Student Number Padding | Whether to pad the student_number with zeros for correlation and import purposes | Yes |
-| studentNumberLength | The length of the student_number property, used for padding with zeros | Yes |
-| Token     | The access token to connect to the API | Yes       |
-| BaseUrl  | The URL to the API                 | Yes       | https://edu.ans.app
-
-The Concurrent actions setting must be set to 1, because the connector needs to retrieve the existing class memberships when updating the class membership, and this can cause concurrency issues when multiple updates are happening at the same time.
+| Setting                 | Description                                                                | Example               | Mandatory |
+| ----------------------- | -------------------------------------------------------------------------- | --------------------- | --------- |
+| SchoolId                | The id of the school.                                                      |                       | Yes       |
+| UseStudentNumberPadding | Whether to pad the `student_number` with zeros for correlation and import. |                       | Yes       |
+| studentNumberLength     | The length of the `student_number` property, used for padding with zeros.  |                       | Yes       |
+| token                   | The access token used to connect to the API.                               |                       | Yes       |
+| BaseUrl                 | The base URL of the API.                                                   | `https://edu.ans.app` | Yes       |
 
 ### Correlation configuration
 
@@ -92,61 +91,61 @@ The correlation configuration is used to specify which properties will be used t
 > _For more information on correlation, please refer to our correlation [documentation](https://docs.helloid.com/en/provisioning/target-systems/powershell-v2-target-systems/correlation.html) pages_.
 
 ### Resources configuration
-The Resources script is used to create classes in Ans, which are used for permissions. The script uses the class name as the unique identifier for the class, so if a class with the same name already exists, it will not create a new class. 
-| Setting | Value                             |
-| ------------------------- | --------------------------------- |
-| Resource configuration name       | Classes (for example)     |
-| Select a field from the contract. | "Custom"                  |
 
-The following custom variables must  be available in de contract for the resource provisioning to work:
-| Variable name | Description|
-| ------------- | ----------- | 
-| AnsName | The name of the class to be created in Ans. This is used as the unique identifier for the class|
-| AnsExternalId | The external id of the class to be created in Ans. |
-| AnsYear | The school year, used for the class creation in Ans. |
+The Resources script is used to create classes in Ans, which are used for permissions. The script uses the class name as the unique identifier for the class, so if a class with the same name already exists it will not create a new class.
 
-See the documentation for more information on how to add custom variables to the contract:
-https://docs.helloid.com/en/provisioning/persons/contracts/contract-schema/add-a-custom-person-or-contract-field.html 
+| Setting                          | Value                 |
+| -------------------------------- | --------------------- |
+| Resource configuration name      | Classes (for example) |
+| Select a field from the contract | Custom                |
+
+The following custom variables must be available on the contract for the resource provisioning to work:
+
+| Variable name | Description                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| AnsName       | The name of the class to be created in Ans. This is used as the unique identifier for the class. |
+| AnsExternalId | The external id of the class to be created in Ans.                                               |
+| AnsYear       | The school year, used for the class creation in Ans.                                             |
+
+See the documentation for more information on how to add custom variables to the contract: https://docs.helloid.com/en/provisioning/persons/contracts/contract-schema/add-a-custom-person-or-contract-field.html
 
 > [!WARNING]
-> When the contract contains additional custom variables that are not used in the resource
-> provisioning script, the SourceData object may contain multiple "identical" entries in wich only the additional custom variables differ. This does not cause an issue for this particular resource script, als only the first encounterd object is used However this may cause perfomance issues. To solve this issue, it is recommended to only include the necessary custom variables in the contract when using the resource provisioning feature, or use an other field from the contract that does not cause identical entries in the SourceData object.  
+> When the contract contains additional custom variables that are not used by the resource provisioning script, the SourceData object may contain multiple "identical" entries that differ only in those additional custom variables. This does not cause a functional issue for this resource script (only the first encountered object is used), but it may cause performance issues. To avoid this, either include only the necessary custom variables in the contract when using the resource provisioning feature, or use another field from the contract that does not produce identical entries in SourceData.
 
 ### Field mapping
- 
-The field mapping can be imported by using the _fieldMapping.json_ file.  Currently this contains mainly name and email address information
+
+The field mapping can be imported using the _fieldMapping.json_ file. It currently contains mainly name and email address information.
 
 ### Account Reference
 
-The account reference is populated with the  `id` property from the _Ans_ account.
+The account reference is populated with the `id` property from the _Ans_ account.
 
 ## Remarks
 
-- When creating an account, the API itself automatically padds the student_number with zeros at the beginning to ensure a fixed length. This causes an issue for correlation because the search API does not pad the student_number provided with zeros. To solve this issue, the connector pads the student_number with zeros before searching for an existing account. The length of the student_number can be configured in the configuration file.
- 
-- The API enforces a rate limit determined by your organisation's pricing plan. If the rate limit is exceeded, the API responds with a HTTP 429 Too Many Requests response code.
-  This connector will pause the provisioning job until the rate limit is reset, which is determinded by the 'rateLimit-Reset' header in the API response. 
+- When creating an account, the API automatically pads the `student_number` with zeros at the beginning to ensure a fixed length. This causes an issue for correlation because the search API does not pad the provided `student_number`. To resolve this, the connector pads the `student_number` with zeros before searching for an existing account. The length used for padding is configured via `studentNumberLength`.
 
-- As an additional security measure, API users are limited to five updates per minute per record. This is not expected to cause issues, as updates to the same account are not expected to be frequent, especially with the concurrent actions setting set to 1.
+- The API enforces a rate limit determined by your organisation's pricing plan. If the rate limit is exceeded, the API responds with an HTTP 429 (Too Many Requests) response. The connector pauses the provisioning job until the rate limit is reset, based on the `ratelimit-reset` header in the API response.
 
-- The delete operation does not remove the account from the system, it only disables it, and sets the alumni status to true . When the user is reboarded the existing account is re-enabled and the alumni status is set to false. 
+- As an additional security measure, API users are limited to five updates per minute per record. This is not expected to cause issues, as updates to the same account are not expected to be frequent, especially with the `Concurrent actions` setting set to `1`.
+
+- The delete operation does not remove the account from the system; it only disables the account and sets the alumni status to `true`. When the person is reboarded, the existing account is re-enabled and the alumni status is set to `false`.
 
 ## Development resources
 
 ### API endpoints
 
-The following endpoints are used by the connector
+The following endpoints are used by the connector:
 
-| Endpoint | HTTP Method      | Description                                  |
-| -------- | ---------------- | -------------------------------------------- |
-| /api/v2/schools/{schoolId}/users | GET | Retrieve user information for import |
-  /api/v2/schools/{schoolId}/users | POST | Create a new user |
-| /api/v2/schools/{schoolId}/classes | GET | Retrieve the classes of a school | used for permissions and permission membership import
-| /api/v2/schools/{schoolId}/classes | POST | Create a new class | used for resource creation|
-| /api/v2/search/users   | GET |  correlate users |
-| /api/v2/users/{userId} | PATCH | Update, Enable, Disable , Delete* an existing user |  Delete does not remove the account from the system, it only disables it, and sets the alumni status op true
-| /api/v2/classes/{classId} | GET | Retrieve class membership information | used for permission membership import, adn for granting and revoking permissions to retrieve the existing class memberships before updating them  
-| /api/v2/classes/{classId} | PATCH | Update class membership information | used for granting and revoking permissions
+| Endpoint                           | HTTP Method | Description                                     | Remarks                                                                                                    |
+| ---------------------------------- | ----------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| /api/v2/schools/{schoolId}/users   | GET         | Retrieve user information for import.           |                                                                                                            |
+| /api/v2/schools/{schoolId}/users   | POST        | Create a new user.                              |                                                                                                            |
+| /api/v2/schools/{schoolId}/classes | GET         | Retrieve the classes of a school.               | Used for permissions and permission membership import.                                                     |
+| /api/v2/schools/{schoolId}/classes | POST        | Create a new class.                             | Used for resource creation.                                                                                |
+| /api/v2/search/users               | GET         | Correlate users.                                |                                                                                                            |
+| /api/v2/users/{userId}             | PATCH       | Update, Enable, Disable or Delete\* a user.     | \* Delete does not remove the account from the system; it only disables it and sets alumni to `true`.      |
+| /api/v2/classes/{classId}          | GET         | Retrieve class membership information.          | Used for permission membership import, and to retrieve current membership before grant/revoke.             |
+| /api/v2/classes/{classId}          | PATCH       | Update class membership information.            | Used for granting and revoking permissions.                                                                |
 
 
 ### API documentation
