@@ -9,9 +9,6 @@
 # Script mapping: contract lookup key used to correlate an ANS class
 $ClassLookupKey = { [string]$_.Custom.AnsExternalId } # Mandatory
 
-# Placeholder label used when no dynamic permissions are calculated
-$noPermissionsDefinedLabel = 'No permissions defined'
-
 # Determine all current sub-permissions
 $currentPermissions = @{}
 
@@ -387,74 +384,6 @@ try {
             Write-Information ("Existing Permissions: {0}" -f ($actionContext.CurrentPermissions.DisplayName | ConvertTo-Json -Depth 10))
 
             #####################################################
-            # Revoke permissions that are no longer desired
-            #####################################################
-            foreach ($permission in $currentPermissions.GetEnumerator()) {
-                $classId = [string]$permission.Key
-                $classDisplayName = [string]$permission.Value
-
-                if ($classId -eq $noPermissionsDefinedLabel) {
-                    continue
-                }
-
-                if (-not $desiredPermissions.ContainsKey($classId)) {
-                    $actionMessage = "revoking ANS class [$classDisplayName] with id [$classId] from account [$accountId]"
-
-                    if ($actionContext.DryRun -eq $true) {
-                        Write-Information "[DryRun] Would revoke ANS class [$classDisplayName] with id [$classId] from account with AccountReference: [$($actionContext.References.Account)]."
-                        continue
-                    }
-
-                    # Retrieve the latest complete membership immediately before patching the class.
-                    $currentClass = $null
-
-                    try {
-                        $currentClass = Get-AnsClass -ClassId $classId -Headers $headers -BaseUrl $baseUrl
-                    }
-                    catch {
-                        $statusCode = Get-HttpStatusCode -ErrorObject $_
-
-                        if ($statusCode -eq 404) {
-                            $outputContext.AuditLogs.Add([PSCustomObject]@{
-                                    Action  = "RevokePermission"
-                                    Message = "Skipped revoking ANS class [$classDisplayName] with id [$classId]. Reason: The class no longer exists."
-                                    IsError = $false
-                                })
-                            continue
-                        }
-                        throw
-                    }
-
-                    $currentMembers = @(
-                        $currentClass.user_ids |
-                        ForEach-Object { [string]$_ } |
-                        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-                        Select-Object -Unique
-                    )
-
-                    if ($currentMembers -notcontains $accountId) {
-                        $outputContext.AuditLogs.Add([PSCustomObject]@{
-                                Action  = "RevokePermission"
-                                Message = "Skipped revoking ANS class [$classDisplayName] with id [$classId] from account with AccountReference: [$($actionContext.References.Account)]. Reason: The user is already no longer a member of the class."
-                                IsError = $false
-                            })
-                        continue
-                    }
-
-                    # ANS requires the complete list of class members.
-                    $updatedMembers = @($currentMembers | Where-Object { $_ -ne $accountId })
-
-                    $null = Set-AnsClassMembers -ClassId $classId -UserIds @($updatedMembers) -Headers $headers -BaseUrl $baseUrl
-
-                    $outputContext.AuditLogs.Add([PSCustomObject]@{
-                            Action  = "RevokePermission"
-                            Message = "Revoked ANS class [$classDisplayName] with id [$classId] from account with AccountReference: [$($actionContext.References.Account)]."
-                            IsError = $false
-                        })
-                }
-            }
-
-            #####################################################
             # Report desired permissions and grant new ones
             #####################################################
             Write-Information "Starting desired permission processing for [$($desiredPermissions.Count)] permissions"
@@ -536,11 +465,81 @@ try {
                     Write-Information "ANS class [$classDisplayName] with id [$classId] is already registered as a current HelloID subpermission"
                 }
             }
+
+            #####################################################
+            # Revoke permissions that are no longer desired
+            #####################################################
+            foreach ($permission in $currentPermissions.GetEnumerator()) {
+                $classId = [string]$permission.Key
+                $classDisplayName = [string]$permission.Value
+
+                if (-not $desiredPermissions.ContainsKey($classId)) {
+                    $actionMessage = "revoking ANS class [$classDisplayName] with id [$classId] from account [$accountId]"
+
+                    if ($actionContext.DryRun -eq $true) {
+                        Write-Information "[DryRun] Would revoke ANS class [$classDisplayName] with id [$classId] from account with AccountReference: [$($actionContext.References.Account)]."
+                        continue
+                    }
+
+                    # Retrieve the latest complete membership immediately before patching the class.
+                    $currentClass = $null
+
+                    try {
+                        $currentClass = Get-AnsClass -ClassId $classId -Headers $headers -BaseUrl $baseUrl
+                    }
+                    catch {
+                        $statusCode = Get-HttpStatusCode -ErrorObject $_
+
+                        if ($statusCode -eq 404) {
+                            $outputContext.AuditLogs.Add([PSCustomObject]@{
+                                    Action  = "RevokePermission"
+                                    Message = "Skipped revoking ANS class [$classDisplayName] with id [$classId]. Reason: The class no longer exists."
+                                    IsError = $false
+                                })
+                            continue
+                        }
+                        throw
+                    }
+
+                    $currentMembers = @(
+                        $currentClass.user_ids |
+                        ForEach-Object { [string]$_ } |
+                        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                        Select-Object -Unique
+                    )
+
+                    if ($currentMembers -notcontains $accountId) {
+                        $outputContext.AuditLogs.Add([PSCustomObject]@{
+                                Action  = "RevokePermission"
+                                Message = "Skipped revoking ANS class [$classDisplayName] with id [$classId] from account with AccountReference: [$($actionContext.References.Account)]. Reason: The user is already no longer a member of the class."
+                                IsError = $false
+                            })
+                        continue
+                    }
+
+                    # ANS requires the complete list of class members.
+                    $updatedMembers = @($currentMembers | Where-Object { $_ -ne $accountId })
+
+                    $null = Set-AnsClassMembers -ClassId $classId -UserIds @($updatedMembers) -Headers $headers -BaseUrl $baseUrl
+
+                    $outputContext.AuditLogs.Add([PSCustomObject]@{
+                            Action  = "RevokePermission"
+                            Message = "Revoked ANS class [$classDisplayName] with id [$classId] from account with AccountReference: [$($actionContext.References.Account)]."
+                            IsError = $false
+                        })
+                }
+            }
+
+            # Set Success to true only when no error audit logs were added during processing.
+            if (-not ($outputContext.AuditLogs.IsError -contains $true)) {
+                $outputContext.Success = $true
+            }
             break
         }
 
         'NotFound' {
             Write-Information "Ans account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
+            $outputContext.Success = $false
             $outputContext.AuditLogs.Add([PSCustomObject]@{
                     Action  = $(if ($actionContext.Operation -eq 'revoke') { 'RevokePermission' } else { 'GrantPermission' })
                     Message = "Ans account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted."
@@ -570,27 +569,4 @@ catch {
             Message = $auditMessage
             IsError = $true
         })
-}
-finally {
-    # Placeholder to prevent an error when no dynamic permissions were calculated.
-    if ($actionContext.Operation -in @('update', 'grant') -and $outputContext.SubPermissions.Count -eq 0) {
-        $outputContext.SubPermissions.Add([PSCustomObject]@{
-                DisplayName = $noPermissionsDefinedLabel
-                Reference   = [PSCustomObject]@{
-                    Id = $noPermissionsDefinedLabel
-                }
-            })
-
-        if ($null -eq $desiredPermissions -or $desiredPermissions.Count -eq 0) {
-            Write-Warning "No desired permissions were calculated for account with AccountReference: [$($actionContext.References.Account)]."
-        }
-        else {
-            Write-Warning "Calculated [$($desiredPermissions.Count)] desired permissions, but no SubPermissions were added for account with AccountReference: [$($actionContext.References.Account)]."
-        }
-    }
-
-    # Set Success to true only when no error audit logs were added.
-    if (-not ($outputContext.AuditLogs.IsError -contains $true)) {
-        $outputContext.Success = $true
-    }
 }
