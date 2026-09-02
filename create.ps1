@@ -48,7 +48,7 @@ function Resolve-AnsError {
     }
 }
 
-function invoke-AnsRestMethod {
+function Invoke-AnsRestMethod {
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -71,12 +71,12 @@ function invoke-AnsRestMethod {
         $Headers = @{},
 
         [int]
-        $Maxretries = 5
+        $MaxRetries = 5
     )
 
     process {
         [int] $retry = 0
-        while ($retry++ -le $Maxretries) {
+        while ($retry -le $MaxRetries) {
             try {
                 $splatParams = @{
                     Uri         = $Uri
@@ -93,6 +93,7 @@ function invoke-AnsRestMethod {
             }
             catch {                
                 if ($_.Exception.Response.StatusCode -eq 429) {
+                    $retry++
                     [int] $retryAfter = -1
                     if ( -not [string]::IsNullOrEmpty($_.Exception.Response.Headers['ratelimit-reset'])) {                    
                         $retryAfter = $_.Exception.Response.Headers['ratelimit-reset'] -as [int]
@@ -127,9 +128,13 @@ function ConvertTo-HelloIDAccountObject {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
+        [AllowNull()]
         [PSCustomObject] $AnsAccountObject
     )
     process {
+        # Route null (e.g. after a swallowed 404 from Invoke-AnsRestMethod) back to the caller so it can enter the NotFound branch.
+        if ($null -eq $AnsAccountObject) { return $null }
+
         # Making sure only fieldMapping fields are imported
         $helloidAccountObject = [PSCustomObject]@{} 
         $null = $outputContext.Data.PSObject.Properties.foreach{
@@ -144,7 +149,7 @@ try {
     # Initial Assignments
     $outputContext.AccountReference = 'Currently not available'
 
-    $access_token = $actionContext.Configuration.token
+    $accessToken = $actionContext.Configuration.Token
 
     # Validate correlation configuration
     if ($actionContext.CorrelationConfiguration.Enabled) {
@@ -172,7 +177,7 @@ try {
             Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/search/users?query=school_id:`"$($actionContext.Configuration.SchoolId)`" $($correlationField):`"$correlationValue`""        
             Method  = 'GET'
             Headers = @{
-                Authorization = "Bearer $access_token"
+                Authorization = "Bearer $accessToken"
             }           
         }
 
@@ -200,7 +205,7 @@ try {
                 Method  = 'POST'
                 Body    = $actionContext.Data | ConvertTo-Json
                 Headers = @{
-                    Authorization = "Bearer $access_token"
+                    Authorization = "Bearer $accessToken"
                 }
             } 
 
@@ -217,7 +222,7 @@ try {
             else {
                 Write-Information '[DryRun] Create and correlate Ans account, will be executed during enforcement'
             }
-            $auditLogMessage = "Create account was successful. AccountReference is: [$($outputContext.AccountReference)]"
+            $auditLogMessage = "Created Ans account with AccountReference: [$($outputContext.AccountReference)]."
             break
         }
 
@@ -227,12 +232,12 @@ try {
             $correlatedHelloIDAccount = ConvertTo-HelloIDAccountObject -AnsAccountObject $correlatedAccount[0]
             $outputContext.Data = $correlatedHelloIDAccount                   
             $outputContext.AccountCorrelated = $true
-            $auditLogMessage = "Correlated account: [$($outputContext.AccountReference)] on field: [$($correlationField)] with value: [$($correlationValue)]"
+            $auditLogMessage = "Correlated Ans account with AccountReference: [$($outputContext.AccountReference)] on field: [$correlationField] with value: [$correlationValue]."
             break
         }
     }
 
-    $outputContext.success = $true
+    $outputContext.Success = $true
     $outputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = $lifecycleProcess
             Message = $auditLogMessage
@@ -240,19 +245,20 @@ try {
         })  
 }
 catch {
-    $outputContext.success = $false
+    $outputContext.Success = $false
     $ex = $PSItem
     if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
         $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
         $errorObj = Resolve-AnsError -ErrorObject $ex
-        $auditLogMessage = "Could not create or correlate Ans account: [$($actionContext.References.Account)]. Error: $($errorObj.FriendlyMessage)"
+        $auditLogMessage = "Could not create or correlate Ans account on field: [$correlationField] with value: [$correlationValue]. Error: $($errorObj.FriendlyMessage)."
         Write-Warning "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
     }
     else {
-        $auditLogMessage = "Could not create or correlate Ans account: [$($actionContext.References.Account)]. Error: $($ex.Exception.Message)"
-        Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+        $auditLogMessage = "Could not create or correlate Ans account on field: [$correlationField] with value: [$correlationValue]. Error: $($ex.Exception.Message)."
+        Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)."
     }
     $outputContext.AuditLogs.Add([PSCustomObject]@{
+            Action  = 'CreateAccount'
             Message = $auditLogMessage
             IsError = $true
         })

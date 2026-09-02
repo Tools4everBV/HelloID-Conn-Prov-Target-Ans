@@ -1,8 +1,7 @@
 ##########################################################
-# HelloID-Conn-Prov-Target-Ans-Resources-class
+# HelloID-Conn-Prov-Target-Ans-Resources-Class
 # PowerShell V2
 ##########################################################
-$actionContext.DryRun = $True
 
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
@@ -48,7 +47,7 @@ function Resolve-AnsError {
         Write-Output $httpErrorObj
     }
 }
-function invoke-AnsImportWebRequest {
+function Invoke-AnsImportWebRequest {
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -71,13 +70,13 @@ function invoke-AnsImportWebRequest {
         $Headers = @{},
 
         [int]
-        $Maxretries = 5
+        $MaxRetries = 5
     )
     process {
 
         [int] $retry = 0
         $Resultdata = $null
-        while ($retry++ -le $Maxretries) {
+        while ($retry -le $MaxRetries) {
             try {
                 $splatParams = @{
                     Uri         = $Uri
@@ -96,6 +95,7 @@ function invoke-AnsImportWebRequest {
             catch {                
                 
                 if ($_.Exception.Response.StatusCode -eq 429) {
+                    $retry++
                     [int] $retryAfter = -1
                     if ( -not [string]::IsNullOrEmpty($_.Exception.Response.Headers['ratelimit-reset'])) {                    
                         $retryAfter = $_.Exception.Response.Headers['ratelimit-reset'] -as [int]
@@ -127,7 +127,7 @@ function invoke-AnsImportWebRequest {
         Return  $resultdata
     }       
 } 
-function invoke-AnsRestMethod {
+function Invoke-AnsRestMethod {
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -150,12 +150,12 @@ function invoke-AnsRestMethod {
         $Headers = @{},
 
         [int]
-        $Maxretries = 5
+        $MaxRetries = 5
     )
 
     process {
         [int] $retry = 0
-        while ($retry++ -le $Maxretries) {
+        while ($retry -le $MaxRetries) {
             try {
                 $splatParams = @{
                     Uri         = $Uri
@@ -172,6 +172,7 @@ function invoke-AnsRestMethod {
             }
             catch {                
                 if ($_.Exception.Response.StatusCode -eq 429) {
+                    $retry++
                     [int] $retryAfter = -1
                     if ( -not [string]::IsNullOrEmpty($_.Exception.Response.Headers['ratelimit-reset'])) {                    
                         $retryAfter = $_.Exception.Response.Headers['ratelimit-reset'] -as [int]
@@ -218,7 +219,7 @@ try {
     Write-Information "Creating [$($resources.Count)] classes for school year [$currentSchoolYear]"
     #Write-Information ($resources | ConvertTo-Json)
 
-    $access_token = $actionContext.Configuration.token
+    $accessToken = $actionContext.Configuration.Token
     $pageSize = 50
     [int] $pageNumber = 1
     [int] $totalPages = 1  
@@ -228,7 +229,7 @@ try {
             Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/schools/$($actionContext.Configuration.SchoolId)/classes?page=$pageNumber&limit=$pageSize"        
             Method  = 'GET'
             Headers = @{
-                Authorization = "Bearer $access_token"
+                Authorization = "Bearer $accessToken"
             }           
         }
         $requestResult = Invoke-AnsImportWebRequest @splatImportParams         
@@ -275,7 +276,7 @@ try {
                 Method  = 'POST'
                 Body    = $body | ConvertTo-Json
                 Headers = @{
-                    Authorization = "Bearer $access_token"
+                    Authorization = "Bearer $accessToken"
                 }
             }
             
@@ -294,7 +295,7 @@ try {
 
                 $outputContext.AuditLogs.Add([PSCustomObject]@{
                         Action  = 'CreateResource'
-                        Message = "Created resource: [$($resource.AnsName)]"
+                        Message = "Created Ans resource: [$($resource.AnsName)] with external_id [$($resource.AnsExternalId)] for year [$($resource.AnsYear)]."
                         IsError = $false
                     })
             }
@@ -307,7 +308,7 @@ try {
                         Method  = 'PATCH'
                         Body    = $body | ConvertTo-Json
                         Headers = @{
-                            Authorization = "Bearer $access_token"
+                            Authorization = "Bearer $accessToken"
                         }
                     }     
                     
@@ -322,7 +323,7 @@ try {
 
                     $outputContext.AuditLogs.Add([PSCustomObject]@{
                             Action  = 'UpdateResource'
-                            Message = "Updated resource: [$($resource.AnsName)]"
+                            Message = "Updated Ans resource: [$($resource.AnsName)] with external_id [$($resource.AnsExternalId)] for year [$($resource.AnsYear)]."
                             IsError = $false
                         })
 
@@ -336,14 +337,15 @@ try {
             if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
                 $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
                 $errorObj = Resolve-AnsError -ErrorObject $ex
-                $auditLogMessage = "Could not create Ans resource. Error: $($errorObj.FriendlyMessage)"
+                $auditLogMessage = "Could not create or update Ans resource: [$($resource.AnsName)] with external_id [$($resource.AnsExternalId)] for year [$($resource.AnsYear)]. Error: $($errorObj.FriendlyMessage)."
                 Write-Warning "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
             }
             else {
-                $auditLogMessage = "Could not create Ans resource. Error: $($ex.Exception.Message)"
+                $auditLogMessage = "Could not create or update Ans resource: [$($resource.AnsName)] with external_id [$($resource.AnsExternalId)] for year [$($resource.AnsYear)]. Error: $($ex.Exception.Message)."
                 Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
             }
             $outputContext.AuditLogs.Add([PSCustomObject]@{
+                    Action  = 'CreateResource'
                     Message = $auditLogMessage
                     IsError = $true
                 })
@@ -357,14 +359,15 @@ catch {
     if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
         $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
         $errorObj = Resolve-AnsError -ErrorObject $ex
-        $auditLogMessage = "Could not create Ans resource. Error: $($errorObj.FriendlyMessage)"
+        $auditLogMessage = "Could not process Ans resources. Error: $($errorObj.FriendlyMessage)."
         Write-Warning "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
     }
     else {
-        $auditLogMessage = "Could not create Ans resource. Error: $($ex.Exception.Message)"
+        $auditLogMessage = "Could not process Ans resources. Error: $($ex.Exception.Message)."
         Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
     }
     $outputContext.AuditLogs.Add([PSCustomObject]@{
+            Action  = 'CreateResource'
             Message = $auditLogMessage
             IsError = $true
         })

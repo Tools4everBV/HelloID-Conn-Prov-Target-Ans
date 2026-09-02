@@ -46,7 +46,7 @@ function Resolve-AnsError {
         Write-Output $httpErrorObj
     }
 }
-function invoke-AnsRestMethod {
+function Invoke-AnsRestMethod {
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -69,12 +69,12 @@ function invoke-AnsRestMethod {
         $Headers = @{},
 
         [int]
-        $Maxretries = 5
+        $MaxRetries = 5
     )
 
     process {
         [int] $retry = 0
-        while ($retry++ -le $Maxretries) {
+        while ($retry -le $MaxRetries) {
             try {
                 $splatParams = @{
                     Uri         = $Uri
@@ -91,6 +91,7 @@ function invoke-AnsRestMethod {
             }
             catch {                
                 if ($_.Exception.Response.StatusCode -eq 429) {
+                    $retry++
                     [int] $retryAfter = -1
                     if ( -not [string]::IsNullOrEmpty($_.Exception.Response.Headers['ratelimit-reset'])) {                    
                         $retryAfter = $_.Exception.Response.Headers['ratelimit-reset'] -as [int]
@@ -131,12 +132,12 @@ try {
     }
 
     Write-Information 'Verifying if a Ans account exists'
-    $access_token = $actionContext.Configuration.token
+    $accessToken = $actionContext.Configuration.Token
     $splatCorrelateParams = @{           
         Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/users/$($actionContext.References.Account)"
         Method  = 'GET'
         Headers = @{
-            Authorization = "Bearer $access_token"
+            Authorization = "Bearer $accessToken"
         }           
     }
 
@@ -160,7 +161,7 @@ try {
                 Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/classes/$($actionContext.References.Permission.Reference)"
                 Method  = 'GET'
                 Headers = @{
-                    Authorization = "Bearer $access_token"
+                    Authorization = "Bearer $accessToken"
                 }           
             }
             $classCorrelationResult = Invoke-AnsRestMethod @splatReadParams 
@@ -169,7 +170,7 @@ try {
                 Write-Information "Ans class: [$($actionContext.References.Permission.Reference)] could not be found, indicating that it may have been deleted"
                 $outputContext.Success = $true
                 $outputContext.AuditLogs.Add([PSCustomObject]@{
-                        Message = "Ans class: [$($actionContext.References.Permission.Reference)] could not be found, indicating that it may have been deleted"
+                        Message = "Ans class: [$($actionContext.References.Permission.Reference)] could not be found, indicating that it may have been deleted."
                         IsError = $false
                     })               
                 break   
@@ -189,7 +190,7 @@ try {
                     Method  = 'PATCH'
                     Body    = $body | ConvertTo-Json 
                     Headers = @{
-                        Authorization = "Bearer $access_token"
+                        Authorization = "Bearer $accessToken"
                     }
                 } 
 
@@ -204,7 +205,8 @@ try {
 
             $outputContext.Success = $true
             $outputContext.AuditLogs.Add([PSCustomObject]@{
-                    Message = "Revoke permission: [$($actionContext.PermissionDisplayName)] from [$($actionContext.References.Account)] was successful. Action initiated by: [$($actionContext.Origin)]"
+                    Action  = 'RevokePermission'
+                    Message = "Revoked Ans permission: [$($actionContext.PermissionDisplayName)] from account with AccountReference: [$($actionContext.References.Account)]."
                     IsError = $false
                 })
             break
@@ -214,7 +216,8 @@ try {
             Write-Information "Ans account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
             $outputContext.Success = $true
             $outputContext.AuditLogs.Add([PSCustomObject]@{
-                    Message = "Ans account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted. Action initiated by: [$($actionContext.Origin)]"
+                    Action  = 'RevokePermission'
+                    Message = "Ans account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted."
                     IsError = $false
                 })
             break
@@ -222,19 +225,20 @@ try {
     }
 }
 catch {
-    $outputContext.success = $false
+    $outputContext.Success = $false
     $ex = $PSItem
     if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
         $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
         $errorObj = Resolve-AnsError -ErrorObject $ex
-        $auditLogMessage = "Could not revoke Ans permission for account: [$($actionContext.References.Account)]. Error: $($errorObj.FriendlyMessage). Action initiated by: [$($actionContext.Origin)]"
+        $auditLogMessage = "Could not revoke Ans permission for account: [$($actionContext.References.Account)]. Error: $($errorObj.FriendlyMessage)."
         Write-Warning "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
     }
     else {
-        $auditLogMessage = "Could not revoke Ans permission for account: [$($actionContext.References.Account)]. Error: $($_.Exception.Message). Action initiated by: [$($actionContext.Origin)]"
-        Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+        $auditLogMessage = "Could not revoke Ans permission for account: [$($actionContext.References.Account)]. Error: $($_.Exception.Message)."
+        Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)."
     }
     $outputContext.AuditLogs.Add([PSCustomObject]@{
+            Action  = 'RevokePermission'
             Message = $auditLogMessage
             IsError = $true
         })

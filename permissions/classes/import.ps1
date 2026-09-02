@@ -48,7 +48,7 @@ function Resolve-AnsError {
     }
 }
 
-function invoke-AnsImportWebRequest {
+function Invoke-AnsImportWebRequest {
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -71,13 +71,13 @@ function invoke-AnsImportWebRequest {
         $Headers = @{},
 
         [int]
-        $Maxretries = 5
+        $MaxRetries = 5
     )
     process {
 
         [int] $retry = 0
         $Resultdata = $null
-        while ($retry++ -le $Maxretries) {
+        while ($retry -le $MaxRetries) {
             try {
                 $splatParams = @{
                     Uri         = $Uri
@@ -96,6 +96,7 @@ function invoke-AnsImportWebRequest {
             catch {                
                 
                 if ($_.Exception.Response.StatusCode -eq 429) {
+                    $retry++
                     [int] $retryAfter = -1
                     if ( -not [string]::IsNullOrEmpty($_.Exception.Response.Headers['ratelimit-reset'])) {                    
                         $retryAfter = $_.Exception.Response.Headers['ratelimit-reset'] -as [int]
@@ -127,7 +128,7 @@ function invoke-AnsImportWebRequest {
         Return  $resultdata
     }       
 } 
-function invoke-AnsRestMethod {
+function Invoke-AnsRestMethod {
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -150,12 +151,12 @@ function invoke-AnsRestMethod {
         $Headers = @{},
 
         [int]
-        $Maxretries = 5
+        $MaxRetries = 5
     )
 
     process {
         [int] $retry = 0
-        while ($retry++ -le $Maxretries) {
+        while ($retry -le $MaxRetries) {
             try {
                 $splatParams = @{
                     Uri         = $Uri
@@ -172,6 +173,7 @@ function invoke-AnsRestMethod {
             }
             catch {                
                 if ($_.Exception.Response.StatusCode -eq 429) {
+                    $retry++
                     [int] $retryAfter = -1
                     if ( -not [string]::IsNullOrEmpty($_.Exception.Response.Headers['ratelimit-reset'])) {                    
                         $retryAfter = $_.Exception.Response.Headers['ratelimit-reset'] -as [int]
@@ -206,7 +208,7 @@ function invoke-AnsRestMethod {
 try {
     Write-Information 'Starting Ans permission entitlement import'
     
-    $access_token = $actionContext.Configuration.token
+    $accessToken = $actionContext.Configuration.Token
     $pageSize = 50
     [int] $pageNumber = 1
     [int] $totalPages = 1  
@@ -215,7 +217,7 @@ try {
             Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/schools/$($actionContext.Configuration.SchoolId)/classes?page=$pageNumber&limit=$pageSize"        
             Method  = 'GET'
             Headers = @{
-                Authorization = "Bearer $access_token"
+                Authorization = "Bearer $accessToken"
             }           
         }
         $requestResult = Invoke-AnsImportWebRequest @splatImportParams         
@@ -232,7 +234,7 @@ try {
             Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/classes/$($class.id)"       
             Method  = 'GET'
             Headers = @{
-                Authorization = "Bearer $access_token"
+                Authorization = "Bearer $accessToken"
             }           
         }
             $requestdetailResult = Invoke-AnsRestMethod @splatImportdetailParams 

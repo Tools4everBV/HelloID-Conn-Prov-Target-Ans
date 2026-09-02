@@ -49,7 +49,7 @@ function Resolve-AnsError {
         Write-Output $httpErrorObj
     }
 }
-function invoke-AnsRestMethod {
+function Invoke-AnsRestMethod {
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -72,12 +72,12 @@ function invoke-AnsRestMethod {
         $Headers = @{},
 
         [int]
-        $Maxretries = 5
+        $MaxRetries = 5
     )
 
     process {
         [int] $retry = 0
-        while ($retry++ -le $Maxretries) {
+        while ($retry -le $MaxRetries) {
             try {
                 $splatParams = @{
                     Uri         = $Uri
@@ -94,6 +94,7 @@ function invoke-AnsRestMethod {
             }
             catch {                
                 if ($_.Exception.Response.StatusCode -eq 429) {
+                    $retry++
                     [int] $retryAfter = -1
                     if ( -not [string]::IsNullOrEmpty($_.Exception.Response.Headers['ratelimit-reset'])) {                    
                         $retryAfter = $_.Exception.Response.Headers['ratelimit-reset'] -as [int]
@@ -128,9 +129,13 @@ function ConvertTo-HelloIDAccountObject {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
+        [AllowNull()]
         [PSCustomObject] $AnsAccountObject
     )
     process {
+        # Route null (e.g. after a swallowed 404 from Invoke-AnsRestMethod) back to the caller so it can enter the NotFound branch.
+        if ($null -eq $AnsAccountObject) { return $null }
+
         # Making sure only fieldMapping fields are imported
         $helloidAccountObject = [PSCustomObject]@{} 
         $null = $outputContext.Data.PSObject.Properties.foreach{
@@ -153,13 +158,13 @@ try {
     }  
 
     Write-Information 'Verifying if a Ans account exists'
-    $access_token = $actionContext.Configuration.token
+    $accessToken = $actionContext.Configuration.Token
 
     $splatCorrelateParams = @{           
         Uri     = "$($actionContext.Configuration.BaseUrl)/api/v2/users/$($actionContext.References.Account)"
         Method  = 'GET'
         Headers = @{
-            Authorization = "Bearer $access_token"
+            Authorization = "Bearer $accessToken"
         }           
     }
 
@@ -172,7 +177,7 @@ try {
 
               
        
-        if ($actionContext.Data.PSObject.Properties.Name -contains 'student_number') {
+        if ($actionContext.Data.PSObject.Properties.Name -contains 'student_number' -and $actionContext.Configuration.UseStudentNumberPadding) {
             $actionContext.Data.student_number = $actionContext.Data.student_number.PadLeft($actionContext.Configuration.StudentNumberLength, '0')
         }
         $splatCompareProperties = @{
@@ -208,7 +213,7 @@ try {
                     Method  = 'PATCH'
                     Body    = $Body | ConvertTo-Json 
                     Headers = @{
-                        Authorization = "Bearer $access_token"
+                        Authorization = "Bearer $accessToken"
                     }
                 } 
                 $updateResult = Invoke-AnsRestMethod @splatUpdateParams         
@@ -220,7 +225,8 @@ try {
            
             $outputContext.Success = $true
             $outputContext.AuditLogs.Add([PSCustomObject]@{
-                    Message = "Update account was successful, Account property(s) updated: [$($propertiesChanged.name -join ',')]"
+                    Action  = 'UpdateAccount'
+                    Message = "Updated Ans account with AccountReference: [$($actionContext.References.Account)]. Property(s) updated: [$($propertiesChanged.Name -join ', ')]."
                     IsError = $false
                 })
             break
@@ -230,7 +236,8 @@ try {
             Write-Information "No changes to Ans account with accountReference: [$($actionContext.References.Account)]"
             $outputContext.Success = $true
             $outputContext.AuditLogs.Add([PSCustomObject]@{
-                    Message = "Skipped updating Ans account with AccountReference: [$($actionContext.References.Account)]. Reason: No changes."
+                    Action  = 'UpdateAccount'
+                    Message = "Skipped updating Ans account with AccountReference: [$($actionContext.References.Account)]. Reason: No changes required."
                     IsError = $false
                 })
             break
@@ -240,7 +247,8 @@ try {
             Write-Information "Ans account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
             $outputContext.Success = $false
             $outputContext.AuditLogs.Add([PSCustomObject]@{
-                    Message = "Ans account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
+                    Action  = 'UpdateAccount'
+                    Message = "Ans account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted."
                     IsError = $true
                 })
             break
@@ -253,14 +261,15 @@ catch {
     if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
         $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
         $errorObj = Resolve-AnsError -ErrorObject $ex
-        $auditLogMessage = "Could not update Ans account: [$($actionContext.References.Account)]. Error: $($errorObj.FriendlyMessage)"
+        $auditLogMessage = "Could not update Ans account: [$($actionContext.References.Account)]. Error: $($errorObj.FriendlyMessage)."
         Write-Warning "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
     }
     else {
-        $auditLogMessage = "Could not update Ans account: [$($actionContext.References.Account)]. Error: $($ex.Exception.Message)"
-        Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+        $auditLogMessage = "Could not update Ans account: [$($actionContext.References.Account)]. Error: $($ex.Exception.Message)."
+        Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)."
     }
     $outputContext.AuditLogs.Add([PSCustomObject]@{
+            Action  = 'UpdateAccount'
             Message = $auditLogMessage
             IsError = $true
         })
