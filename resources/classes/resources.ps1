@@ -6,6 +6,9 @@
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
+# Script mapping: when $true (or during a DryRun) the log includes a message for every resource that was skipped because no changes were needed.
+$ShowSkippedResources = $false
+
 #region functions
 function Resolve-AnsError {
     [CmdletBinding()]
@@ -216,8 +219,6 @@ try {
         ($null -ne $_.AnsYear) -and
         ([int]::Parse($_.AnsYear) -eq $currentSchoolYear)
     }
-    Write-Information "Creating [$($resources.Count)] classes for school year [$currentSchoolYear]"
-    #Write-Information ($resources | ConvertTo-Json)
 
     $accessToken = $actionContext.Configuration.Token
     $pageSize = 50
@@ -252,13 +253,14 @@ try {
         }
         
     } while ($pageNumber -le $totalPages)   
+
+    Write-Information "Retrieved [$($foundClasses.Count)] existing class(es) from ANS for school [$($actionContext.Configuration.SchoolId)]"
    
     foreach ($resource in $resources) {
         try {
             <# Resource creation preview uses a timeout of 30 seconds while actual run has timeout of 10 minutes #>
-            Write-Information  "Ans resource [$($resource.AnsExternalId)][$($resource.AnsName)][$($resource.AnsYear)]"
             if ($null -eq $resource.AnsExternalId -or $null -eq $resource.AnsName -or $null -eq $resource.AnsYear) {
-                Write-Warning "Resource [$($resource.AnsExternalId)][$($resource.AnsName)][$($resource.AnsYear)] is missing required fields. Skipping."
+                Write-Warning "Skipping resource: missing required fields — name=[$($resource.AnsName)], external_id=[$($resource.AnsExternalId)], year=[$($resource.AnsYear)]"
                 continue
             }
 
@@ -284,13 +286,13 @@ try {
             if (-not $foundClasses.ContainsKey($resourceKey)) {
                 
                 if (-not ($actionContext.DryRun -eq $True)) {
-                    Write-Information "Create [$($resource.AnsName)] Ans resource"
+                    Write-Information "Creating new ANS class: name=[$($resource.AnsName)], external_id=[$($resource.AnsExternalId)], year=[$($resource.AnsYear)]"
                     $createResult = Invoke-AnsRestMethod @splatCreateParams
                     $foundClasses.Add($resourceKey, $createResult[0]) # Add the newly created resource to the list of found resources to prevent duplicate creation in the same run
 
                 }
                 else {
-                    Write-Information "[DryRun] Create Ans [$($resource.AnsName)] resource, will be executed during enforcement"
+                    Write-Information "[DryRun] Would create ANS class [$($resource.AnsName)] year [$($resource.AnsYear)] with external_id [$($resource.AnsExternalId)] during enforcement"
                 }
 
                 $outputContext.AuditLogs.Add([PSCustomObject]@{
@@ -313,12 +315,12 @@ try {
                     }     
                     
                     if (-not ($actionContext.DryRun -eq $True)) {
-                        Write-Information "Update [$($resource.AnsName)] Ans resource"
+                        Write-Information "Updating ANS class [name=$($resource.AnsName)] year [$($resource.AnsYear)]: external_id changing from [$($foundClasses[$resourceKey].external_id)] to [$($resource.AnsExternalId)]"
                         $updateResult = Invoke-AnsRestMethod @splatUpdateParams
                         $foundClasses[$resourceKey] = $updateResult[0] # Update the resource in the list of found resources to prevent duplicate update in the same run
                     }
                     else {
-                        Write-Information "[DryRun] Update Ans [$($resource.AnsName)] resource, will be executed during enforcement"
+                        Write-Information "[DryRun] Would update ANS class [$($resource.AnsName)] year [$($resource.AnsYear)]: external_id [$($foundClasses[$resourceKey].external_id)] -> [$($resource.AnsExternalId)] during enforcement"
                     }
 
                     $outputContext.AuditLogs.Add([PSCustomObject]@{
@@ -326,9 +328,12 @@ try {
                             Message = "Updated Ans resource: [$($resource.AnsName)] with external_id [$($resource.AnsExternalId)] for year [$($resource.AnsYear)]."
                             IsError = $false
                         })
-
-                    Write-Information "Resource [$($resource.AnsName)] Updated. new external id: [$($resource.AnsExternalId)], new year: [$($resource.AnsYear)]"
                 }           
+                else {
+                    if ($ShowSkippedResources -or $actionContext.DryRun -eq $true) {
+                        Write-Information "Skipping resource [$($resource.AnsName)] year [$($resource.AnsYear)]: class already exists with matching external_id [$($resource.AnsExternalId)], no changes needed"
+                    }
+                }
             }
         }
         catch {
