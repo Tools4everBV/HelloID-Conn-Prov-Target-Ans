@@ -175,11 +175,6 @@ try {
 
         $outputContext.PreviousData = $correlatedAccount
 
-              
-       
-        if ($actionContext.Data.PSObject.Properties.Name -contains 'student_number' -and $actionContext.Configuration.UseStudentNumberPadding) {
-            $actionContext.Data.student_number = $actionContext.Data.student_number.PadLeft($actionContext.Configuration.StudentNumberLength, '0')
-        }
         $splatCompareProperties = @{
             ReferenceObject  = @($correlatedAccount.PSObject.Properties)
             DifferenceObject = @($actionContext.Data.PSObject.Properties)

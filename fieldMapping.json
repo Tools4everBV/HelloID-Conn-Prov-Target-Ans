@@ -20,7 +20,7 @@
     },
     {
       "Name": "student_number",
-      "Description": "",
+      "Description": "The ANS student number. Populated by the AnsStudentNumber custom person field on the source (padded with leading zeros to match ANS's server-side padding).",
       "Type": "Text",
       "MappingActions": [
         {
@@ -28,7 +28,7 @@
             "Create"
           ],
           "MappingMode": "Field",
-          "Value": "\"Person.ExternalId\"",
+          "Value": "\"Person.Custom.AnsStudentNumber\"",
           "UsedInNotifications": false,
           "StoreInAccountData": false
         }

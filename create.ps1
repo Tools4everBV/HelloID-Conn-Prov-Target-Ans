@@ -163,12 +163,7 @@ try {
             throw 'Correlation is enabled but [accountFieldValue] is empty. Please make sure it is correctly mapped'
         }
 
-        $correlationValue = $correlationValue.Trim() 
-        if ($correlationField -eq 'student_number') {
-            if ($actionContext.Configuration.UseStudentNumberPadding) {
-                 $correlationValue = $correlationValue.PadLeft($actionContext.Configuration.StudentNumberLength, '0') # Pad the student number with zeros based on the configured length
-            }  
-        }    
+        $correlationValue = $correlationValue.Trim()
 
         # Determine if a user needs to be [created] or [correlated]
         Write-Information "Verifying if a Ans account exists where $correlationField is: [$correlationValue]"

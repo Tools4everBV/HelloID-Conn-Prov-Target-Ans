@@ -10,26 +10,6 @@
         }
     },
     {
-        "key": "UseStudentNumberPadding",
-        "type": "checkbox",
-        "defaultValue": true,
-        "templateOptions": {
-            "label": "Use Student Number Padding",
-            "description": "When toggled, student numbers will be padded with zeros if they are shorter than the specified length.",
-            "required": false
-        }
-    },
-    {
-        "key": "studentNumberLength",
-        "type": "input",
-        "defaultValue": "9",
-        "templateOptions": {
-            "label": "Student Number Length",
-            "description": "The length of the student number. If the student number is shorter than this length, it will be padded with zeros at the beginning.",
-            "required": true
-        }
-    },
-    {
         "key": "token",
         "type": "input",
         "defaultValue": "",

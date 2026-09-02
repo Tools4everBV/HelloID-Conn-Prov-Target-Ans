@@ -138,24 +138,12 @@ function ConvertTo-HelloIDImportAccountObject {
     )
     process {
         # Making sure only fieldMapping fields are imported
-        $helloidImportAccountObject = @{} 
-        foreach ($field in $actionContext.ImportFields) {            
-            switch ($field) {
-                'student_number' {                    
-                    if ($null -ne $AccountObject.student_number -and $actionContext.Configuration.UseStudentNumberPadding) {
-                         $helloidImportAccountObject["student_number"] = $AccountObject.student_number.TrimStart('0')                       
-                    }
-                    else{
-                        $helloidImportAccountObject["student_number"] = $AccountObject.student_number 
-                    }                                       
-                }
-                default { 
-                    $helloidImportAccountObject["$field"] = $AccountObject.$($field)                         
-                }
-            }
+        $helloidImportAccountObject = @{}
+        foreach ($field in $actionContext.ImportFields) {
+            $helloidImportAccountObject["$field"] = $AccountObject.$($field)
         }
-        Write-Output $helloidImportAccountObject  
-    }        
+        Write-Output $helloidImportAccountObject
+    }
 }
 #endregion
 

@@ -22,6 +22,7 @@
     - [Requirements](#requirements)
     - [Connection settings](#connection-settings)
     - [Correlation configuration](#correlation-configuration)
+    - [Custom person field: AnsStudentNumber](#custom-person-field-ansstudentnumber)
     - [Resources configuration](#resources-configuration)
     - [Field mapping](#field-mapping)
     - [Account Reference](#account-reference)
@@ -69,26 +70,56 @@ The `Concurrent actions` setting must be set to `1`, because the connector needs
 
 The following settings are required to connect to the API.
 
-| Setting                 | Description                                                                | Example               | Mandatory |
-| ----------------------- | -------------------------------------------------------------------------- | --------------------- | --------- |
-| SchoolId                | The id of the school.                                                      |                       | Yes       |
-| UseStudentNumberPadding | Whether to pad the `student_number` with zeros for correlation and import. |                       | Yes       |
-| studentNumberLength     | The length of the `student_number` property, used for padding with zeros.  |                       | Yes       |
-| token                   | The access token used to connect to the API.                               |                       | Yes       |
-| BaseUrl                 | The base URL of the API.                                                   | `https://edu.ans.app` | Yes       |
+| Setting  | Description                                  | Example               | Mandatory |
+| -------- | -------------------------------------------- | --------------------- | --------- |
+| SchoolId | The id of the school.                        |                       | Yes       |
+| token    | The access token used to connect to the API. |                       | Yes       |
+| BaseUrl  | The base URL of the API.                     | `https://edu.ans.app` | Yes       |
 
 ### Correlation configuration
 
 The correlation configuration is used to specify which properties will be used to match an existing account within _Ans_ to a person in _HelloID_.
 
-| Setting                   | Value                             |
-| ------------------------- | --------------------------------- |
-| Enable correlation        | `True`                            |
-| Person correlation field  | `PersonContext.Person.ExternalId` |
-| Account correlation field | `student_number`                  |
+| Setting                   | Value                                          |
+| ------------------------- | ---------------------------------------------- |
+| Enable correlation        | `True`                                         |
+| Person correlation field  | `Custom.AnsStudentNumber` |
+| Account correlation field | `student_number`                               |
 
 > [!TIP]
 > _For more information on correlation, please refer to our correlation [documentation](https://docs.helloid.com/en/provisioning/target-systems/powershell-v2-target-systems/correlation.html) pages_.
+
+### Custom person field: AnsStudentNumber
+
+ANS pads `student_number` server-side to a fixed length on Create, which means HelloID must also send and correlate on the padded form. The connector itself does no padding; instead, a Custom person field named `AnsStudentNumber` on the HelloID source pads the raw student number with leading zeros. The connector then uses that field as-is for both correlation and field mapping.
+
+Create a Custom person field with the following settings:
+
+| Setting      | Value              |
+| ------------ | ------------------ |
+| Name         | `AnsStudentNumber` |
+| Mapping mode | Complex            |
+
+Use the following JavaScript as the field value:
+
+```javascript
+// AnsStudentNumber: pad the source student number with leading zeros to the
+// length expected by ANS. ANS pads student_number server-side on Create,
+// so HelloID must send and correlate on the padded form.
+function getAnsStudentNumber() {
+    let externalId = source.ExternalId;
+
+    // ANS default length is 9. Adjust to your organisation's numbering scheme if needed.
+    let length = 9;
+    return externalId.padStart(length, '0');
+}
+
+getAnsStudentNumber();
+```
+
+Adjust `source.ExternalId` if the raw student number lives in a different source field, and change `length` if your organisation uses a different fixed length.
+
+See the documentation for more information on adding custom person fields: https://docs.helloid.com/en/provisioning/persons/contracts/contract-schema/add-a-custom-person-or-contract-field.html
 
 ### Resources configuration
 
@@ -122,7 +153,7 @@ The account reference is populated with the `id` property from the _Ans_ account
 
 ## Remarks
 
-- When creating an account, the API automatically pads the `student_number` with zeros at the beginning to ensure a fixed length. This causes an issue for correlation because the search API does not pad the provided `student_number`. To resolve this, the connector pads the `student_number` with zeros before searching for an existing account. The length used for padding is configured via `studentNumberLength`.
+- ANS pads `student_number` server-side on Create to a fixed length. The connector does not pad on its side; the padded value is provided by the [`AnsStudentNumber`](#custom-person-field-ansstudentnumber) Custom person field on the HelloID source and is used for both correlation and field mapping.
 
 - The API enforces a rate limit determined by your organisation's pricing plan. If the rate limit is exceeded, the API responds with an HTTP 429 (Too Many Requests) response. The connector pauses the provisioning job until the rate limit is reset, based on the `ratelimit-reset` header in the API response.
 
